@@ -110,6 +110,28 @@
 - `GET /api/reviews?status=`、`GET /api/reviews/batch/{batchId}?status=`、`GET /api/reviews/{id}`。
 - 通知：`GET /api/notifications?regNo=&unreadOnly=`、`POST /api/notifications/{id}/read`（本版站内落库，短信等外发渠道下版再接）。
 
+### 11-补. 复核材料与申请流转变分离（grade-review-1）
+
+**申请流转与材料阅读分开处理**：复核单的提交/结论/关闭是一条线；材料进入、附件换版、阅读是另一条线，阅读只追加阅读记录，**不改变复核单状态、不受复核窗口影响**。
+
+- **材料进入留档、按时间排列**：`POST /api/review-materials`（`reviewId,title,materialType(DOC/PHOTO/FORM/OTHER),fileRef,contentHash,fileSize,originalFilename,content?,internalAnnotation?`；附件与正文至少给一个）。材料列表按进入 evops-base 的时间排列：`GET /api/review-materials?reviewId=`、`GET /api/review-materials/{id}`。
+- **附件版本替换留摘要**：`POST /api/review-materials/{id}/replace`（新 `fileRef/content` + 必填 `reason`）。旧版不删除，置 `SUPERSEDED` 并保留摘要（文件名/大小/哈希/替换原因/钟点），追加 ACTIVE 新版；版本链 `GET /api/review-materials/{id}/versions`，阅读记录 `GET /api/review-materials/{id}/reads`。
+- **窗口关闭只禁止新受理**：窗口 CLOSED 后 `POST /api/reviews/apply` 返回 `REVIEW_WINDOW_CLOSED`；历史申请、结论、材料版本与阅读照常可查可阅（含超窗 CLOSED 的申请）。
+- **审核岗写明依据**：`POST /api/reviews/{id}/conclusion` 的 `conclusion`（结论依据）对通过/驳回都**必填**（`REVIEW_CONCLUSION_BASIS_REQUIRED`），通知正文随附"结论依据"。
+- **内部批注**：`POST /api/review-materials/{id}/annotation?annotation=` 写内部批注，仅内部管理视图可见。
+- **通知回执挂回原申请**：结论通知与超窗关闭通知均带 `reviewId`；学员详情视图直接挂回该申请的复核类回执（查询限定 `REVIEW_RESULT/REVIEW_CLOSED`，不与复用同表的申诉通知串线）。
+- **导出不带内部批注**：管理端 `GET /api/reviews/batch/{batchId}/export.csv`（含结论依据、材料各版摘要，历史不受窗口影响），严格不含 `internalAnnotation`。
+
+**学员本人窗口**（`X-Self-Code: 报名号`，与违纪自查同一机制；只能读本人资料，非本人的申请/材料/通知统一按不存在处理，不暴露存在性）：
+
+- `GET /api/reviews/my?status=`：本人申请（脱敏：姓名掩码，不含审核岗经办信息）。
+- `GET /api/reviews/my/{id}`：本人详情——含按时间排列的材料与版本摘要（旧版只给摘要）、挂回原申请的通知回执；**不含内部批注、不下发文件引用/正文**。
+- `POST /api/reviews/my/materials/{materialId}/read`：阅读本人材料当前版并留痕（SELF，独立于流转，窗口关闭后仍可阅读）。
+- `GET /api/reviews/my/notifications?unreadOnly=`、`POST /api/reviews/my/notifications/{id}/read`：本人回执与已读（非本人通知按不存在处理）。
+- `GET /api/reviews/my/export.csv`：导出本人复核资料（姓名掩码、含材料版本摘要、不含内部批注）。
+
+材料三表 `t_review_material / t_review_material_version / t_review_material_read` 已纳入工作区快照/回退（schema 版本 `grade-review-1`）。
+
 ## 同校混编整改工作区（mix-1）
 
 针对"同校学员相邻而坐、抄袭"的监考通报：在现有编排上加同校错开约束，同校按比例摊到多个考场，座次表可打印，重排整批进行不留半新半旧，并给出同校相邻统计供巡考抽查。种子与座次由 **evops-base** 落库保存。

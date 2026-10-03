@@ -41,17 +41,20 @@ public class ScoreReviewService {
     private final ExamBatchService batchService;
     private final ScoreService scoreService;
     private final ScoreNotificationService notificationService;
+    private final ReviewMaterialService materialService;
 
     public ScoreReviewService(ScoreReviewMapper reviewMapper,
                               ExamScoreMapper scoreMapper,
                               ExamBatchService batchService,
                               ScoreService scoreService,
-                              ScoreNotificationService notificationService) {
+                              ScoreNotificationService notificationService,
+                              ReviewMaterialService materialService) {
         this.reviewMapper = reviewMapper;
         this.scoreMapper = scoreMapper;
         this.batchService = batchService;
         this.scoreService = scoreService;
         this.notificationService = notificationService;
+        this.materialService = materialService;
     }
 
     // ---------- 窗口状态 ----------
@@ -160,12 +163,16 @@ public class ScoreReviewService {
         LocalDateTime now = LocalDateTime.now();
 
         boolean approved = Boolean.TRUE.equals(request.getApproved());
+        // 审核岗修改结论状态必须写明依据：通过/驳回都不允许空依据
+        String basis = request.getConclusion() == null ? null : request.getConclusion().trim();
+        if (basis == null || basis.isEmpty()) {
+            throw new BusinessException("REVIEW_CONCLUSION_BASIS_REQUIRED",
+                    "出具复核结论必须写明结论依据（试卷核验情况、成绩变动理由等），不允许空结论");
+        }
         if (approved) {
             if (request.getNewScore() == null) {
                 throw new BusinessException("NEW_SCORE_REQUIRED", "复核通过必须填写复核后卷面分");
             }
-            String reason = request.getConclusion() == null || request.getConclusion().trim().isEmpty()
-                    ? "复核通过改分" : request.getConclusion().trim();
 
             // 改分前后快照先记到复核单
             review.setScoreBefore(score.getPaperScore());
@@ -173,12 +180,12 @@ public class ScoreReviewService {
 
             // 按原定级规则版本重算等级，改分前后写只追加日志
             ScoreChangeLog changeLog = scoreService.applyReviewChange(
-                    score, request.getNewScore(), reason, review.getId(), reviewer);
+                    score, request.getNewScore(), basis, review.getId(), reviewer);
 
             review.setStatus(GradeConstants.REVIEW_APPROVED);
             review.setScoreAfter(changeLog.getScoreAfter());
             review.setGradeAfter(changeLog.getGradeAfter());
-            review.setConclusion(reason);
+            review.setConclusion(basis);
             review.setReviewer(reviewer);
             review.setConcludedAt(now);
             reviewMapper.updateById(review);
@@ -187,20 +194,18 @@ public class ScoreReviewService {
                     review.getRegNo(), review.getName(),
                     GradeConstants.NOTIFY_REVIEW_RESULT,
                     "成绩复核结果：通过",
-                    String.format("您的成绩复核已通过并改分：%s 分（%s）→ %s 分（%s）。规则版本 %s。",
+                    String.format("您的成绩复核已通过并改分：%s 分（%s）→ %s 分（%s）。规则版本 %s。结论依据：%s",
                             changeLog.getScoreBefore(), changeLog.getGradeBefore(),
                             changeLog.getScoreAfter(), changeLog.getGradeAfter(),
-                            changeLog.getRuleVersionNo()),
+                            changeLog.getRuleVersionNo(), basis),
                     review.getId(), reviewer);
         } else {
-            String conclusion = request.getConclusion() == null || request.getConclusion().trim().isEmpty()
-                    ? "复核驳回，维持原分" : request.getConclusion().trim();
             review.setStatus(GradeConstants.REVIEW_REJECTED);
             review.setScoreBefore(score.getPaperScore());
             review.setGradeBefore(score.getGrade());
             review.setScoreAfter(score.getPaperScore());
             review.setGradeAfter(score.getGrade());
-            review.setConclusion(conclusion);
+            review.setConclusion(basis);
             review.setReviewer(reviewer);
             review.setConcludedAt(now);
             reviewMapper.updateById(review);
@@ -211,8 +216,8 @@ public class ScoreReviewService {
                     review.getRegNo(), review.getName(),
                     GradeConstants.NOTIFY_REVIEW_RESULT,
                     "成绩复核结果：维持原分",
-                    String.format("您的成绩复核已处理：维持原分 %s 分（%s）。%s",
-                            score.getPaperScore(), score.getGrade(), conclusion),
+                    String.format("您的成绩复核已处理：维持原分 %s 分（%s）。结论依据：%s",
+                            score.getPaperScore(), score.getGrade(), basis),
                     review.getId(), reviewer);
         }
         return review;
@@ -284,6 +289,96 @@ public class ScoreReviewService {
             wrapper.eq("status", status.trim().toUpperCase());
         }
         return reviewMapper.selectList(wrapper);
+    }
+
+    // ---------- 学员本人视图（X-Self-Code：只能读本人资料；窗口关闭后历史仍可查看） ----------
+
+    /** 学员只列本人的复核申请（历史内容窗口关闭后仍可查看）；统一脱敏视图，不带审核岗经办信息。 */
+    public List<com.evops.grade.vo.ReviewSelfVO> selfList(String regNo, String status) {
+        if (regNo == null || regNo.trim().isEmpty()) {
+            throw new BusinessException("REG_NO_REQUIRED", "报名号不能为空");
+        }
+        QueryWrapper<ScoreReview> wrapper = new QueryWrapper<ScoreReview>()
+                .eq("reg_no", regNo.trim())
+                .orderByDesc("applied_at", "id");
+        if (status != null && !status.trim().isEmpty()) {
+            wrapper.eq("status", status.trim().toUpperCase());
+        }
+        List<com.evops.grade.vo.ReviewSelfVO> result = new ArrayList<>();
+        for (ScoreReview r : reviewMapper.selectList(wrapper)) {
+            result.add(toSelfVO(r, false));
+        }
+        return result;
+    }
+
+    /**
+     * 学员本人复核详情（脱敏视图）：非本人统一按不存在处理，不暴露申请存在性。
+     * 材料（按进入时间、旧版只留摘要、不含内部批注）与通知回执一并挂回原申请。
+     */
+    public com.evops.grade.vo.ReviewSelfVO selfView(Long reviewId, String regNo) {
+        ScoreReview review = requireReview(reviewId);
+        if (regNo == null || !regNo.trim().equals(review.getRegNo())) {
+            throw new BusinessException("REVIEW_NOT_FOUND", "复核申请不存在：id=" + reviewId);
+        }
+        return toSelfVO(review, true);
+    }
+
+    /** 学员脱敏视图：includeDetail=true 时附材料与通知回执（详情），列表只回申请本体。 */
+    private com.evops.grade.vo.ReviewSelfVO toSelfVO(ScoreReview review, boolean includeDetail) {
+        com.evops.grade.vo.ReviewSelfVO vo = new com.evops.grade.vo.ReviewSelfVO();
+        vo.setId(review.getId());
+        vo.setBatchId(review.getBatchId());
+        vo.setRegNo(review.getRegNo());
+        vo.setMaskedName(maskName(review.getName()));
+        vo.setStatus(review.getStatus());
+        vo.setStatusLabel(reviewStatusLabel(review.getStatus()));
+        vo.setApplyReason(review.getApplyReason());
+        vo.setAppliedAt(review.getAppliedAt());
+        vo.setConclusion(review.getConclusion());
+        vo.setConcludedAt(review.getConcludedAt());
+        vo.setScoreBefore(review.getScoreBefore());
+        vo.setGradeBefore(review.getGradeBefore());
+        vo.setScoreAfter(review.getScoreAfter());
+        vo.setGradeAfter(review.getGradeAfter());
+        if (includeDetail) {
+            vo.setMaterials(materialService.selfMaterials(review.getId()));
+            for (com.evops.grade.entity.ScoreNotification n
+                    : notificationService.listByReview(review.getId())) {
+                com.evops.grade.vo.ReviewSelfVO.ReceiptVO r = new com.evops.grade.vo.ReviewSelfVO.ReceiptVO();
+                r.setNotificationId(n.getId());
+                r.setNotifyType(n.getNotifyType());
+                r.setTitle(n.getTitle());
+                r.setContent(n.getContent());
+                r.setStatus(n.getStatus());
+                r.setNotifiedAt(n.getNotifiedAt());
+                r.setReadAt(n.getReadAt());
+                vo.getReceipts().add(r);
+            }
+        }
+        return vo;
+    }
+
+    private String reviewStatusLabel(String status) {
+        if (GradeConstants.REVIEW_SUBMITTED.equals(status)) {
+            return "待处理";
+        }
+        if (GradeConstants.REVIEW_APPROVED.equals(status)) {
+            return "复核通过";
+        }
+        if (GradeConstants.REVIEW_REJECTED.equals(status)) {
+            return "复核驳回";
+        }
+        if (GradeConstants.REVIEW_CLOSED.equals(status)) {
+            return "超窗关闭";
+        }
+        return status;
+    }
+
+    private String maskName(String name) {
+        if (name == null || name.isEmpty()) {
+            return "";
+        }
+        return name.length() == 1 ? name : name.substring(0, 1) + "*";
     }
 
     // ---------- 内部 ----------

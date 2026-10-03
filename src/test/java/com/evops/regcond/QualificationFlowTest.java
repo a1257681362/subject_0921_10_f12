@@ -59,7 +59,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class QualificationFlowTest {
 
     private static final String PROJECT = "ZHUKAO";
-    private static final LocalDate SUBMIT_DAY = LocalDate.of(2026, 10, 2);
+    // 提交日取运行当天：规则版本按当前时刻发布，提交日不能早于发布时刻（夹具随系统日期滚动，避免硬编码过期）
+    private static final LocalDate SUBMIT_DAY = LocalDate.now();
 
     /** 当前用例的级别（publishRule 时设定，submitRequest 自动带上）。 */
     private String level;
@@ -197,11 +198,11 @@ class QualificationFlowTest {
         legacyCert("OLD-001", "张三", "助考一级", null,
                 LocalDate.of(2024, 1, 1), LocalDate.of(2028, 12, 31));
 
-        // 年限边界算头算尾：起始日 2023-10-03，提交日 2026-10-02，
+        // 年限边界算头算尾：起始日 = 提交日往前整 3 年，
         // 普通口径差 2 年 364 天，算头算尾正好 3 周年，应当通过
         QualificationView v = qualificationService.submit(submitRequest(
                 batch, "RC001", "张三", "11010119900101001X",
-                "BACHELOR", LocalDate.of(2023, 10, 3), "OLD-001"));
+                "BACHELOR", SUBMIT_DAY.minusYears(3).plusDays(1), "OLD-001"));
 
         assertEquals(RegCondConstants.QUAL_QUALIFIED, v.getQualification().getStatus());
         assertEquals(RegCondConstants.VIA_AUTO, v.getQualification().getQualifiedVia());
@@ -223,10 +224,10 @@ class QualificationFlowTest {
     void years_inclusiveBoundary_oneDayMoreFails() {
         publishRule("TJRZ02", "LV02", standardRule());
 
-        // 起始再晚一天：2023-10-04 → 算头算尾仅 2 年 11 个足月，不满足 3 周年
+        // 起始再晚一天：整 3 年起点 +1 天 → 算头算尾不足 3 周年
         QualificationView v = qualificationService.submit(submitRequest(
                 null, "RC002", "李四", "11010119900202002X",
-                "BACHELOR", LocalDate.of(2023, 10, 4), null));
+                "BACHELOR", SUBMIT_DAY.minusYears(3).plusDays(2), null));
 
         QualificationCheckItem years = itemOf(v, RegCondConstants.ITEM_YEARS);
         assertEquals(RegCondConstants.CHECK_FAIL, years.getResult());
@@ -443,7 +444,7 @@ class QualificationFlowTest {
                 LocalDate.of(2024, 1, 1), LocalDate.of(2028, 12, 31));
         QualificationView before = qualificationService.submit(submitRequest(
                 batch, "RC008", "吴十", "11010119900808008X",
-                "BACHELOR", LocalDate.of(2023, 10, 2), "OLD-SNAP"));
+                "BACHELOR", SUBMIT_DAY.minusYears(3).plusDays(1), "OLD-SNAP"));
         assertEquals(RegCondConstants.QUAL_QUALIFIED, before.getQualification().getStatus());
 
         // 先打快照，再造一条核验单
@@ -452,7 +453,7 @@ class QualificationFlowTest {
 
         QualificationView extra = qualificationService.submit(submitRequest(
                 batch, "RC008B", "吴十B", "11010119900808008B",
-                "BACHELOR", LocalDate.of(2023, 10, 2), "OLD-SNAP"));
+                "BACHELOR", SUBMIT_DAY.minusYears(3).plusDays(1), "OLD-SNAP"));
         assertNotNull(qualificationMapper.selectById(extra.getQualification().getId()));
 
         // 回退到快照，快照后新增的核验单应消失
@@ -465,7 +466,7 @@ class QualificationFlowTest {
         // 回退后仍可正常落新单（序列已重置，不撞主键）
         QualificationView after = qualificationService.submit(submitRequest(
                 batch, "RC008C", "吴十C", "11010119900808008C",
-                "BACHELOR", LocalDate.of(2023, 10, 2), "OLD-SNAP"));
+                "BACHELOR", SUBMIT_DAY.minusYears(3).plusDays(1), "OLD-SNAP"));
         assertNotNull(after.getQualification().getId());
     }
 

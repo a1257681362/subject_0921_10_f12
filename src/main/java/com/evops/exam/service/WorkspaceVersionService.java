@@ -31,6 +31,9 @@ import com.evops.exam.entity.ArrangementRun;
 import com.evops.grade.entity.ExamScore;
 import com.evops.grade.entity.GradeRule;
 import com.evops.grade.entity.GradeRuleVersion;
+import com.evops.grade.entity.ReviewMaterial;
+import com.evops.grade.entity.ReviewMaterialRead;
+import com.evops.grade.entity.ReviewMaterialVersion;
 import com.evops.grade.entity.ScoreChangeLog;
 import com.evops.grade.entity.ScoreNotification;
 import com.evops.grade.entity.ScoreReview;
@@ -75,6 +78,9 @@ import com.evops.vault.mapper.VaultPersonMapper;
 import com.evops.grade.mapper.ExamScoreMapper;
 import com.evops.grade.mapper.GradeRuleMapper;
 import com.evops.grade.mapper.GradeRuleVersionMapper;
+import com.evops.grade.mapper.ReviewMaterialMapper;
+import com.evops.grade.mapper.ReviewMaterialReadMapper;
+import com.evops.grade.mapper.ReviewMaterialVersionMapper;
 import com.evops.grade.mapper.ScoreChangeLogMapper;
 import com.evops.grade.mapper.ScoreNotificationMapper;
 import com.evops.grade.mapper.ScoreReviewMapper;
@@ -185,6 +191,9 @@ public class WorkspaceVersionService {
     private final ScoreReviewMapper reviewMapper;
     private final ScoreChangeLogMapper changeLogMapper;
     private final ScoreNotificationMapper notificationMapper;
+    private final ReviewMaterialMapper reviewMaterialMapper;
+    private final ReviewMaterialVersionMapper reviewMaterialVersionMapper;
+    private final ReviewMaterialReadMapper reviewMaterialReadMapper;
     private final MixAlgorithmMapper mixAlgorithmMapper;
     private final MixAlgorithmVersionMapper mixVersionMapper;
     private final ArrangementRunMapper arrangementRunMapper;
@@ -260,6 +269,9 @@ public class WorkspaceVersionService {
                                    ScoreReviewMapper reviewMapper,
                                    ScoreChangeLogMapper changeLogMapper,
                                    ScoreNotificationMapper notificationMapper,
+                                   ReviewMaterialMapper reviewMaterialMapper,
+                                   ReviewMaterialVersionMapper reviewMaterialVersionMapper,
+                                   ReviewMaterialReadMapper reviewMaterialReadMapper,
                                    MixAlgorithmMapper mixAlgorithmMapper,
                                    MixAlgorithmVersionMapper mixVersionMapper,
                                    ArrangementRunMapper arrangementRunMapper,
@@ -334,6 +346,9 @@ public class WorkspaceVersionService {
         this.reviewMapper = reviewMapper;
         this.changeLogMapper = changeLogMapper;
         this.notificationMapper = notificationMapper;
+        this.reviewMaterialMapper = reviewMaterialMapper;
+        this.reviewMaterialVersionMapper = reviewMaterialVersionMapper;
+        this.reviewMaterialReadMapper = reviewMaterialReadMapper;
         this.mixAlgorithmMapper = mixAlgorithmMapper;
         this.mixVersionMapper = mixVersionMapper;
         this.arrangementRunMapper = arrangementRunMapper;
@@ -514,6 +529,9 @@ public class WorkspaceVersionService {
             data.put("reviews", reviewMapper.selectList(null));
             data.put("changeLogs", changeLogMapper.selectList(null));
             data.put("notifications", notificationMapper.selectList(null));
+            data.put("reviewMaterials", reviewMaterialMapper.selectList(null));
+            data.put("reviewMaterialVersions", reviewMaterialVersionMapper.selectList(null));
+            data.put("reviewMaterialReads", reviewMaterialReadMapper.selectList(null));
             data.put("mixAlgorithms", mixAlgorithmMapper.selectList(null));
             data.put("mixVersions", mixVersionMapper.selectList(null));
             data.put("arrangementRuns", arrangementRunMapper.selectList(null));
@@ -632,6 +650,9 @@ public class WorkspaceVersionService {
         restoreMapper.clearVaultPersons();
         restoreMapper.clearVaultConfigs();
         restoreMapper.clearNotifications();
+        restoreMapper.clearReviewMaterialReads();
+        restoreMapper.clearReviewMaterialVersions();
+        restoreMapper.clearReviewMaterials();
         restoreMapper.clearArrangementRuns();
         restoreMapper.clearSettlementAdjustments();
         restoreMapper.clearSettlementItems();
@@ -699,6 +720,15 @@ public class WorkspaceVersionService {
         }
         for (ScoreNotification n : nullSafe(data.notifications)) {
             restoreMapper.insertNotification(n);
+        }
+        for (ReviewMaterial m : nullSafe(data.reviewMaterials)) {
+            restoreMapper.insertReviewMaterial(m);
+        }
+        for (ReviewMaterialVersion v : nullSafe(data.reviewMaterialVersions)) {
+            restoreMapper.insertReviewMaterialVersion(v);
+        }
+        for (ReviewMaterialRead r : nullSafe(data.reviewMaterialReads)) {
+            restoreMapper.insertReviewMaterialRead(r);
         }
         for (ExamineeCheckin c : nullSafe(data.examineeCheckins)) {
             restoreMapper.insertExamineeCheckin(c);
@@ -884,6 +914,9 @@ public class WorkspaceVersionService {
         restoreMapper.restartReview(restoreMapper.maxReviewId() + 1);
         restoreMapper.restartChangeLog(restoreMapper.maxChangeLogId() + 1);
         restoreMapper.restartNotification(restoreMapper.maxNotificationId() + 1);
+        restoreMapper.restartReviewMaterial(restoreMapper.maxReviewMaterialId() + 1);
+        restoreMapper.restartReviewMaterialVersion(restoreMapper.maxReviewMaterialVersionId() + 1);
+        restoreMapper.restartReviewMaterialRead(restoreMapper.maxReviewMaterialReadId() + 1);
         restoreMapper.restartExamineeCheckin(restoreMapper.maxExamineeCheckinId() + 1);
         restoreMapper.restartViolationRecord(restoreMapper.maxViolationRecordId() + 1);
         restoreMapper.restartAbsenceMark(restoreMapper.maxAbsenceMarkId() + 1);
@@ -1018,6 +1051,9 @@ public class WorkspaceVersionService {
         public List<ScoreReview> reviews;
         public List<ScoreChangeLog> changeLogs;
         public List<ScoreNotification> notifications;
+        public List<ReviewMaterial> reviewMaterials;
+        public List<ReviewMaterialVersion> reviewMaterialVersions;
+        public List<ReviewMaterialRead> reviewMaterialReads;
         public List<MixAlgorithm> mixAlgorithms;
         public List<MixAlgorithmVersion> mixVersions;
         public List<ArrangementRun> arrangementRuns;

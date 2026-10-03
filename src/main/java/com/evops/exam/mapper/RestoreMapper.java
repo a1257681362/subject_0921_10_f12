@@ -37,6 +37,9 @@ import com.evops.vault.entity.VaultPerson;
 import com.evops.grade.entity.ExamScore;
 import com.evops.grade.entity.GradeRule;
 import com.evops.grade.entity.GradeRuleVersion;
+import com.evops.grade.entity.ReviewMaterial;
+import com.evops.grade.entity.ReviewMaterialRead;
+import com.evops.grade.entity.ReviewMaterialVersion;
 import com.evops.grade.entity.ScoreChangeLog;
 import com.evops.grade.entity.ScoreNotification;
 import com.evops.grade.entity.ScoreReview;
@@ -129,6 +132,15 @@ public interface RestoreMapper {
 
     @Delete("DELETE FROM t_score_change_log")
     void clearChangeLogs();
+
+    @Delete("DELETE FROM t_review_material_read")
+    void clearReviewMaterialReads();
+
+    @Delete("DELETE FROM t_review_material_version")
+    void clearReviewMaterialVersions();
+
+    @Delete("DELETE FROM t_review_material")
+    void clearReviewMaterials();
 
     @Delete("DELETE FROM t_score_review")
     void clearReviews();
@@ -259,6 +271,30 @@ public interface RestoreMapper {
             + "#{title},#{content},#{status},#{reviewId},#{operator},#{notifiedAt},#{readAt},"
             + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
     void insertNotification(ScoreNotification n);
+
+    @Insert("INSERT INTO t_review_material (id, review_id, batch_id, registration_id, reg_no, name, title, "
+            + "material_type, status, current_version, internal_annotation, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{reviewId},#{batchId},#{registrationId},#{regNo},#{name},#{title},"
+            + "#{materialType},#{status},#{currentVersion},#{internalAnnotation},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertReviewMaterial(ReviewMaterial m);
+
+    @Insert("INSERT INTO t_review_material_version (id, material_id, review_id, version_no, status, file_ref, "
+            + "content_hash, content, file_size, original_filename, digest_summary, change_type, change_reason, "
+            + "operator, entered_at, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{materialId},#{reviewId},#{versionNo},#{status},#{fileRef},"
+            + "#{contentHash},#{content},#{fileSize},#{originalFilename},#{digestSummary},"
+            + "#{changeType},#{changeReason},#{operator},#{enteredAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertReviewMaterialVersion(ReviewMaterialVersion v);
+
+    @Insert("INSERT INTO t_review_material_read (id, material_id, version_no, review_id, reg_no, reader, "
+            + "reader_kind, read_at, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{materialId},#{versionNo},#{reviewId},#{regNo},#{reader},"
+            + "#{readerKind},#{readAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertReviewMaterialRead(ReviewMaterialRead r);
 
     @Insert("INSERT INTO t_mix_algorithm (id, code, name, project_code, remark, "
             + "create_by, create_time, update_by, update_time) VALUES "
@@ -395,6 +431,15 @@ public interface RestoreMapper {
     @Select("SELECT COALESCE(MAX(id),0) FROM t_score_notification")
     long maxNotificationId();
 
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_review_material")
+    long maxReviewMaterialId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_review_material_version")
+    long maxReviewMaterialVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_review_material_read")
+    long maxReviewMaterialReadId();
+
     @Select("SELECT COALESCE(MAX(id),0) FROM t_mix_algorithm")
     long maxMixAlgorithmId();
 
@@ -472,6 +517,15 @@ public interface RestoreMapper {
 
     @Update("ALTER TABLE t_score_notification ALTER COLUMN id RESTART WITH ${value}")
     void restartNotification(@Param("value") long value);
+
+    @Update("ALTER TABLE t_review_material ALTER COLUMN id RESTART WITH ${value}")
+    void restartReviewMaterial(@Param("value") long value);
+
+    @Update("ALTER TABLE t_review_material_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartReviewMaterialVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_review_material_read ALTER COLUMN id RESTART WITH ${value}")
+    void restartReviewMaterialRead(@Param("value") long value);
 
     @Update("ALTER TABLE t_mix_algorithm ALTER COLUMN id RESTART WITH ${value}")
     void restartMixAlgorithm(@Param("value") long value);

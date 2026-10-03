@@ -48,4 +48,18 @@ public final class GradeConstants {
     public static final String WINDOW_NOT_OPENED = "NOT_OPENED";
     public static final String WINDOW_OPEN = "OPEN";
     public static final String WINDOW_CLOSED = "CLOSED";
+
+    // grade-review-1：复核材料（流转与阅读分离）
+    /** 材料在档：当前版本，文件可阅读。 */
+    public static final String MATERIAL_ACTIVE = "ACTIVE";
+    /** 材料已被新版本替换：旧版不删，仅留摘要，可查不可读正文。 */
+    public static final String MATERIAL_SUPERSEDED = "SUPERSEDED";
+    /** 材料随申请进入 evops-base 留档。 */
+    public static final String MATERIAL_REGISTER = "REGISTER";
+    /** 附件版本替换：旧版置 SUPERSEDED 留摘要。 */
+    public static final String MATERIAL_REPLACE = "REPLACE";
+    /** 阅读人：审核岗（X-Operator）。 */
+    public static final String READER_STAFF = "STAFF";
+    /** 阅读人：学员本人（X-Self-Code）。 */
+    public static final String READER_SELF = "SELF";
 }

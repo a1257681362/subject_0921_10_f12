@@ -55,6 +55,31 @@ public class ScoreNotificationService {
         return notificationMapper.selectList(wrapper);
     }
 
+    /**
+     * 通知回执按原申请挂回：取一张复核申请下的复核类通知（结论 / 超窗关闭）。
+     * 必须同时限定通知类型：review_id 是多态列，报名条件申诉通知也复用本表写 appealId，
+     * 只按 id 反查会把 id 碰巧相同的申诉通知误挂到复核单上。
+     */
+    public List<ScoreNotification> listByReview(Long reviewId) {
+        return notificationMapper.selectList(new QueryWrapper<ScoreNotification>()
+                .eq("review_id", reviewId)
+                .in("notify_type", java.util.Arrays.asList(
+                        GradeConstants.NOTIFY_REVIEW_RESULT, GradeConstants.NOTIFY_REVIEW_CLOSED))
+                .orderByDesc("notified_at", "id"));
+    }
+
+    /**
+     * 学员本人标记已读：只能读本人的通知回执，非本人统一按不存在处理，不暴露存在性。
+     */
+    @Transactional
+    public ScoreNotification markReadForSelf(Long id, String regNo) {
+        ScoreNotification n = notificationMapper.selectById(id);
+        if (n == null || regNo == null || !regNo.trim().equals(n.getRegNo())) {
+            throw new BusinessException("NOTIFICATION_NOT_FOUND", "通知不存在：id=" + id);
+        }
+        return markRead(id);
+    }
+
     @Transactional
     public ScoreNotification markRead(Long id) {
         ScoreNotification n = notificationMapper.selectById(id);
