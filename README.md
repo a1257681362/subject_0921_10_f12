@@ -510,3 +510,58 @@
   仅回已封存记录（含证据与完整轨迹），Shiro 链路限定 `system` 或 `discipline_archiver` 任一角色，其余已认证账号 403、未认证 401。
 
 > 新表 `t_discipline_case / t_discipline_evidence / t_discipline_case_version / t_discipline_consequence / t_discipline_urge / t_discipline_config` 已纳入工作区快照与回退；`t_exam_score` 加列 `discipline_case_no`（老库平滑加列）；schema 版本号 `discipline-1`。
+
+## 复核申请与材料流转工作区（grade-review-1）
+
+针对"复核申请和证明材料搅在一起、窗口一关什么都看不了、学员能翻到别人材料"的问题：把复核做成**申请流转与材料阅读分开**的两条线——
+**窗口期内受理申请（窗口只卡新受理）→ 材料进 evops-base 按时间排列、附件版本替换留摘要 → 审核岗写依据出结论（版本只追加）→ 通知回执挂回原申请 → 学员只读本人资料 → 导出台账不带内部批注**。
+复核申请分**模块（主表）/ 版本（只追加）/ 状态（当前版本）**三段，材料同样模块/版本两段，与违纪案件、缺考裁定同一套版本模式。
+
+账号口径：内部办案仍用 `bootstrap/bootstrap`（角色 `system`）；新增**复核审核岗** `reviewer/reviewer`
+（角色 `grade_reviewer`），**只能访问复核窗口 `/api/grade-review/**`**，访问其余接口返回 403；
+`employer`、`archiver` 均不能访问复核窗口。学员凭报名号请求头 `X-Self-Code` 进入本人视图，只读本人资料。
+
+### 53. 提交复核申请（窗口只卡新受理）
+
+- `POST /api/grade-review/requests`：`{batchId, regNo, applyReason?, applicant?, materials?:[{materialType,title,fileRef?,contentHash?,content?,summary?}]}`。
+  按批次 + 报名号定位名册；仅窗口 **OPEN** 受理（窗口口径与批次 `reviewStartAt/reviewEndAt` 一致，可用 `POST /api/batches/{id}/review-window` 配置）；
+  未配置 / 未开始 / 已关闭分别返回可读原因（`REVIEW_WINDOW_NOT_CONFIGURED / NOT_OPENED / CLOSED`）。
+  申请号 `FH + 批次编码 + 4 位流水`；受理即 **SUBMITTED 待结论**，追加 CREATE 版本；初始材料一并入库。
+  同一学员有在办（SUBMITTED）申请不可重复提交（`REVIEW_DUPLICATE`）。
+- **窗口关闭只禁止新受理**：在办申请照常出结论，全部历史内容（申请 / 材料 / 版本 / 回执）照常可查，不做超窗自动关闭。
+
+### 54. 材料阅读（与申请流转分开）
+
+- `POST /api/grade-review/requests/{id}/materials`：在办申请补传材料（已结论申请的材料只读，`REVIEW_ALREADY_CONCLUDED`）；
+  类型 `DOC/PHOTO/VIDEO/OTHER`，附件类给 `fileRef`（建议同时给 `contentHash`），文字材料给 `content`。
+- `GET /api/grade-review/requests/{id}/materials`：材料清单**按上传时间排列**；`GET /api/grade-review/materials/{materialId}` 当前版本详情。
+- `POST /api/grade-review/materials/{materialId}/replace`：附件版本替换，`{fileRef?,contentHash?,content?,changeSummary}`——
+  **替换摘要必填**（`CHANGE_SUMMARY_REQUIRED`），未给的字段沿用上版；旧版本永不修改。
+- `GET /api/grade-review/materials/{materialId}/versions`：材料版本链 `UPLOAD/REPLACE` 只追加，替换版带摘要。
+
+### 55. 审核岗出结论（修改结论状态必须写明依据）
+
+- `POST /api/grade-review/requests/{id}/conclusion`：`{conclusionStatus:"APPROVED|REJECTED", basis, conclusion?}`——
+  **依据必填**（`BASIS_REQUIRED`），审核人取 `X-Operator`；状态变更追加 CONCLUDE 版本（含依据快照），
+  已结论申请可再改结论、同样写依据留版；结论即站内通知学员，**回执挂回原申请**。
+- `GET /api/grade-review/requests?batchId=&status=`、`GET /api/grade-review/requests/{id}`、
+  `GET /api/grade-review/requests/{id}/versions`（版本链）、`GET /api/grade-review/requests/{id}/notices`（通知与已读回执）。
+- `POST /api/grade-review/requests/{id}/notes` `{note}`：**内部批注**只追加；`GET .../notes` 内部可查——
+  批注不进学员视图、不进导出文件。
+
+### 56. 学员本人视图（受权限限制只读本人资料）
+
+- 凭报名号请求头 **`X-Self-Code=<报名号>`**（缺省拒绝，`SELF_CODE_REQUIRED`）：
+  `GET /api/grade-review/my/requests`、`GET /api/grade-review/my/requests/{id}`、
+  `GET /api/grade-review/my/requests/{id}/materials`、`GET /api/grade-review/my/notices`、`POST /api/grade-review/my/notices/{noticeId}/read`。
+- 只回**本人那条**：掩码姓名（如 `张*`）、申请号、状态、结论与依据、材料当前版本、通知内容；
+  **不含审核人、内部批注**；查别人的申请统一"查无此申请"，不暴露存在性。
+- 通知已读即回执：`read` 后回执（已读钟点）挂回原申请，流转侧 `GET .../notices` 可见。
+
+### 57. 台账导出（不带内部批注）
+
+- `GET /api/grade-review/export.csv?batchId=`：批次复核台账 CSV（带 BOM，Excel 直接打开不乱码），
+  列：申请号 / 批次编码 / 报名号 / 姓名 / 状态 / 结论说明 / 结论依据 / 申请时间 / 结论时间 / 材料数 / 通知回执。
+  **导出文件不得带出内部批注**——批注只留在库内，任何导出都不含。
+
+> 新表 `t_grade_review / t_grade_review_version / t_grade_review_material / t_grade_review_material_version / t_grade_review_notice / t_grade_review_note` 已纳入工作区快照与回退；schema 版本号 `grade-review-1`。

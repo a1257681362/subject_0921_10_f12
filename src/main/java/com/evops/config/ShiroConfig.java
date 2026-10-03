@@ -109,6 +109,8 @@ public class ShiroConfig {
         realm.addAccount("employer", "employer", "employer");
         // 违纪档案授权岗：仅可访问封存记录窗口 /api/discipline/sealed/**（其他接口返回 403）
         realm.addAccount("archiver", "archiver", "discipline_archiver");
+        // 复核审核岗：可访问复核申请与材料窗口 /api/grade-review/**（其他接口返回 403）
+        realm.addAccount("reviewer", "reviewer", "grade_reviewer");
         return realm;
     }
 
@@ -121,6 +123,8 @@ public class ShiroConfig {
         chain.addPathDefinition("/api/cert-verify", "authcBasic");
         // 违纪封存记录窗口：内部管理(system)或违纪档案授权岗(discipline_archiver)任一即可，其余账号 403
         chain.addPathDefinition("/api/discipline/sealed/**", "authcBasic,anyRoles[system,discipline_archiver]");
+        // 复核申请与材料窗口：内部管理(system)或复核审核岗(grade_reviewer)任一即可，其余账号 403
+        chain.addPathDefinition("/api/grade-review/**", "authcBasic,anyRoles[system,grade_reviewer]");
         // 其余 API 仅内部管理角色 system；用人单位/档案岗访问返回可读 403
         chain.addPathDefinition("/api/**", "authcBasic,roles[system]");
         chain.addPathDefinition("/**", "authc");

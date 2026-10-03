@@ -70,6 +70,12 @@ import com.evops.discipline.entity.DisciplineConfig;
 import com.evops.discipline.entity.DisciplineConsequence;
 import com.evops.discipline.entity.DisciplineEvidence;
 import com.evops.discipline.entity.DisciplineUrge;
+import com.evops.gradereview.entity.ReviewMaterial;
+import com.evops.gradereview.entity.ReviewMaterialVersion;
+import com.evops.gradereview.entity.ReviewNote;
+import com.evops.gradereview.entity.ReviewNotice;
+import com.evops.gradereview.entity.GradeReview;
+import com.evops.gradereview.entity.GradeReviewVersion;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -1266,4 +1272,106 @@ public interface RestoreMapper {
 
     @Update("ALTER TABLE t_discipline_config ALTER COLUMN id RESTART WITH ${value}")
     void restartDisciplineConfig(@Param("value") long value);
+
+    // ============ grade-review-1：复核申请与材料流转 ============
+    @Delete("DELETE FROM t_grade_review_note")
+    void clearGradeReviewNotes();
+
+    @Delete("DELETE FROM t_grade_review_notice")
+    void clearGradeReviewNotices();
+
+    @Delete("DELETE FROM t_grade_review_material_version")
+    void clearGradeReviewMaterialVersions();
+
+    @Delete("DELETE FROM t_grade_review_material")
+    void clearGradeReviewMaterials();
+
+    @Delete("DELETE FROM t_grade_review_version")
+    void clearGradeReviewVersions();
+
+    @Delete("DELETE FROM t_grade_review")
+    void clearGradeReviews();
+
+    @Insert("INSERT INTO t_grade_review (id, apply_no, batch_id, registration_id, reg_no, name, apply_reason, "
+            + "applicant, applied_at, status, current_version, conclusion, basis, reviewer, concluded_at, "
+            + "operator, remark, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{applyNo},#{batchId},#{registrationId},#{regNo},#{name},#{applyReason},"
+            + "#{applicant},#{appliedAt},#{status},#{currentVersion},#{conclusion},#{basis},#{reviewer},"
+            + "#{concludedAt},#{operator},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertGradeReview(GradeReview r);
+
+    @Insert("INSERT INTO t_grade_review_version (id, review_id, version_no, status, change_type, "
+            + "conclusion, basis, operator, changed_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{reviewId},#{versionNo},#{status},#{changeType},"
+            + "#{conclusion},#{basis},#{operator},#{changedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertGradeReviewVersion(GradeReviewVersion v);
+
+    @Insert("INSERT INTO t_grade_review_material (id, review_id, apply_no, material_type, title, "
+            + "file_ref, content_hash, content, current_version, uploaded_by, uploaded_at, remark, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{reviewId},#{applyNo},#{materialType},#{title},"
+            + "#{fileRef},#{contentHash},#{content},#{currentVersion},#{uploadedBy},#{uploadedAt},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertGradeReviewMaterial(ReviewMaterial m);
+
+    @Insert("INSERT INTO t_grade_review_material_version (id, material_id, version_no, change_type, "
+            + "file_ref, content_hash, content, change_summary, operator, changed_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{materialId},#{versionNo},#{changeType},"
+            + "#{fileRef},#{contentHash},#{content},#{changeSummary},#{operator},#{changedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertGradeReviewMaterialVersion(ReviewMaterialVersion v);
+
+    @Insert("INSERT INTO t_grade_review_notice (id, review_id, apply_no, batch_id, registration_id, reg_no, name, "
+            + "notify_type, title, content, status, notified_at, read_at, operator, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{reviewId},#{applyNo},#{batchId},#{registrationId},#{regNo},#{name},"
+            + "#{notifyType},#{title},#{content},#{status},#{notifiedAt},#{readAt},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertGradeReviewNotice(ReviewNotice n);
+
+    @Insert("INSERT INTO t_grade_review_note (id, review_id, note, operator, noted_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{reviewId},#{note},#{operator},#{notedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertGradeReviewNote(ReviewNote n);
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_grade_review")
+    long maxGradeReviewId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_grade_review_version")
+    long maxGradeReviewVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_grade_review_material")
+    long maxGradeReviewMaterialId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_grade_review_material_version")
+    long maxGradeReviewMaterialVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_grade_review_notice")
+    long maxGradeReviewNoticeId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_grade_review_note")
+    long maxGradeReviewNoteId();
+
+    @Update("ALTER TABLE t_grade_review ALTER COLUMN id RESTART WITH ${value}")
+    void restartGradeReview(@Param("value") long value);
+
+    @Update("ALTER TABLE t_grade_review_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartGradeReviewVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_grade_review_material ALTER COLUMN id RESTART WITH ${value}")
+    void restartGradeReviewMaterial(@Param("value") long value);
+
+    @Update("ALTER TABLE t_grade_review_material_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartGradeReviewMaterialVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_grade_review_notice ALTER COLUMN id RESTART WITH ${value}")
+    void restartGradeReviewNotice(@Param("value") long value);
+
+    @Update("ALTER TABLE t_grade_review_note ALTER COLUMN id RESTART WITH ${value}")
+    void restartGradeReviewNote(@Param("value") long value);
 }
